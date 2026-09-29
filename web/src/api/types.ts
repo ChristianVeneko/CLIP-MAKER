@@ -112,4 +112,5 @@ export interface JobSummary {
 
 export interface Job extends JobSummary {
   clips: Clip[];
+  options: { aspect_ratio: AspectRatio; caption_style: string };
 }

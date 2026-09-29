@@ -6,6 +6,7 @@ import { Hero } from "../components/Hero";
 import { NoKeyBanner } from "../components/NoKeyBanner";
 import { SourceCard } from "../components/SourceCard";
 import { SettingsPanel } from "../components/settings/SettingsPanel";
+import { RecentJobsContainer } from "./RecentJobsContainer";
 import { useJobSettings } from "../hooks/useJobSettings";
 import { useVideoSource } from "../hooks/useVideoSource";
 import { generateBlocker } from "../lib/validation";
@@ -65,6 +66,7 @@ export function CreateJobContainer({ config, onJobCreated }: Props) {
           <GenerateBar blocker={blocker} busy={submitting} error={submitError} onGenerate={generate} />
         </>
       )}
+      {!video.source && <RecentJobsContainer onOpen={onJobCreated} />}
     </main>
   );
 }
