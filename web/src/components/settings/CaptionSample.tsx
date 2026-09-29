@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import type { CaptionPreset } from "../../api/types";
 import { fontFace } from "../../hooks/useCaptionFonts";
 
-const SIZE_BOOST = 1.45; // the mini card is much smaller than a real 1080px frame
+const SIZE_BOOST = 1.7; // the mini card is much smaller than a real 1080px frame
 
 interface Props {
   preset: CaptionPreset;

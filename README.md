@@ -116,3 +116,30 @@ boundaries and clamped to the `--clip-length` range; `render` uses the file as i
 ```bash
 uv run pytest
 ```
+
+
+## Web app
+
+A local single-user UI (FastAPI backend + React/Vite frontend in `web/`).
+
+```bash
+# Production-like: build the frontend once, then one process serves UI + API
+cd web && npm install && npm run build && cd ..
+uv run clipmaker serve                 # http://127.0.0.1:8000  (--host, --port, --workdir, --output)
+
+# Development: backend on :8000, Vite dev server with hot reload and an /api proxy
+uv run clipmaker serve &
+cd web && npm run dev                  # http://localhost:5173  (CLIPMAKER_API overrides the proxy target)
+```
+
+`web/dist` is **not committed**: build it with `npm run build`. Without it, `serve` exposes only the API
+(`/api/config`, `/api/probe`, `/api/uploads/{video,srt}`, `/api/jobs`, `/api/jobs/{id}`, `/api/jobs/{id}/clips`,
+`/api/jobs/{id}/media/{file}`, `/api/fonts/{file}`).
+
+- Jobs run one at a time in a background thread; progress is reported per stage (download, transcribe, select,
+  render clip i/n). State is kept in memory and in `output/jobs/<id>/job.json`; finished jobs survive restarts,
+  unfinished ones are marked failed. Clips and thumbnails live in `output/jobs/<id>/`.
+- Without `OPENAI_API_KEY`, generation is only accepted when "Momentos específicos" contains explicit ranges
+  (validated in the UI and the backend).
+- Caption cards are drawn from `captions.preset_catalog()` using the fonts in `assets/fonts/`, served by the backend.
+- Frontend tests: `cd web && npm test` (vitest, pure helpers). Backend tests: `uv run pytest`.

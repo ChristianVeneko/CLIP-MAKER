@@ -109,7 +109,7 @@ option {
 .segment small {
   font-weight: 500;
   font-size: 11px;
-  color: var(--faint);
+  color: var(--muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   max-width: 100%;
   overflow: hidden;
