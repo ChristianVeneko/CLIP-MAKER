@@ -115,7 +115,7 @@ def build_prompt(
 
 
 def _fmt_time(seconds: float) -> str:
-    s = int(seconds)
+    s = int(round(seconds))
     h, m, sec = s // 3600, (s % 3600) // 60, s % 60
     return f"{h}:{m:02d}:{sec:02d}" if h else f"{m}:{sec:02d}"
 
