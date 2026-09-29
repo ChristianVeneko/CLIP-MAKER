@@ -101,6 +101,11 @@ def build_parser() -> argparse.ArgumentParser:
     pv.add_argument("--at", type=float, default=380.0, help="frame time in seconds")
     pv.add_argument("--aspect-ratio", choices=ASPECT_RATIOS, default="9:16")
     _common(pv)
+
+    sv = sub.add_parser("serve", help="start the local web app")
+    sv.add_argument("--host", default="127.0.0.1")
+    sv.add_argument("--port", type=int, default=8000)
+    _common(sv)
     return parser
 
 
@@ -137,6 +142,15 @@ def main(argv: list[str] | None = None) -> int:
             clips = load_clips_file(clips_file)
             outs = render_clips(video_dir / "source.mp4", clips, words, args.output / args.video_id, options)
             print("\n".join(f"[done] {o}" for o in outs))
+        elif args.command == "serve":
+            import uvicorn
+
+            from .web.app import Settings, create_app
+
+            settings = Settings(workdir=args.workdir, output_dir=args.output)
+            if settings.web_dist is None:
+                print("[serve] web/dist not found: only the API is served (build it with `npm run build` in web/)")
+            uvicorn.run(create_app(settings), host=args.host, port=args.port)
         elif args.command == "preview-styles":
             from .detection import face_center_at, probe_video
             from .options import ASPECT_SIZES

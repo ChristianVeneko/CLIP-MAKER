@@ -50,3 +50,12 @@ def test_render_and_select_share_options():
 def test_preview_styles_subcommand():
     a = build_parser().parse_args(["preview-styles", "vid", "--at", "380"])
     assert a.command == "preview-styles" and a.at == 380.0
+
+
+def test_serve_command_parses_defaults():
+    from clipmaker.cli import build_parser
+
+    args = build_parser().parse_args(["serve"])
+    assert (args.command, args.host, args.port) == ("serve", "127.0.0.1", 8000)
+    args = build_parser().parse_args(["serve", "--port", "9000", "--workdir", "w"])
+    assert args.port == 9000 and str(args.workdir) == "w"

@@ -41,3 +41,28 @@ def download_video(url: str, workdir: Path) -> tuple[str, Path]:
     if not target.exists():
         raise RuntimeError(f"yt-dlp finished but {target} was not created")
     return video_id, target
+
+
+def parse_probe(stdout: str) -> dict:
+    """Reduce yt-dlp ``--dump-json`` output to the fields the UI needs."""
+    import json
+
+    info = json.loads(stdout.strip().splitlines()[-1])
+    return {
+        "id": info["id"],
+        "title": info.get("title") or info["id"],
+        "duration": float(info.get("duration") or 0),
+        "thumbnail": info.get("thumbnail") or "",
+    }
+
+
+def probe_url(url: str) -> dict:
+    """Fetch metadata (title, duration, thumbnail, id) without downloading the video."""
+    proc = subprocess.run(
+        [*_ytdlp(), "--no-playlist", "--skip-download", "--dump-json", "--no-warnings", url],
+        capture_output=True, text=True,
+    )  # fmt: skip
+    if proc.returncode != 0:
+        lines = [ln for ln in proc.stderr.splitlines() if ln.strip()]
+        raise RuntimeError((lines[-1] if lines else "yt-dlp failed").removeprefix("ERROR: "))
+    return parse_probe(proc.stdout)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 from . import cropping
@@ -27,6 +28,10 @@ from .srt import cues_to_transcript, parse_srt
 from .subtitles import Word, rebase_words
 from .transcribe import segments_and_words, transcribe_video, transcript_cache_name
 from .zoom import zoom_expression, zoom_keyframes, zoom_triggers
+
+
+# progress(stage, fraction 0..1 within the stage, human-readable message)
+ProgressFn = Callable[[str, float, str], None]
 
 
 def clip_ranges_in_window(
@@ -114,6 +119,7 @@ def render_clips(
     out_dir: Path,
     options: JobOptions,
     sample_fps: float = 6.0,
+    progress: ProgressFn | None = None,
 ) -> list[Path]:
     out_w, out_h = options.output_size
     src_w, src_h, _, _ = probe_video(source)
@@ -121,7 +127,10 @@ def render_clips(
     needs_crop = crop_w < src_w - 2
     out_dir.mkdir(parents=True, exist_ok=True)
     outputs = []
+    total = len(clips)
+    report = progress or (lambda stage, fraction, message: None)
     for n, clip in enumerate(clips, start=1):
+        report("render", (n - 1) / total, f"Rendering clip {n}/{total}")
         duration = clip.end - clip.start
         stem = f"{n:02d}_{slugify(clip.title)}"
         mp4, ass = out_dir / f"{stem}.mp4", out_dir / f"{stem}.ass"
@@ -150,6 +159,7 @@ def render_clips(
             FONTS_DIR if FONTS_DIR.exists() else None,
         )  # fmt: skip
         outputs.append(mp4)
+    report("render", 1.0, f"Rendered {total} clip(s)")
     return outputs
 
 
