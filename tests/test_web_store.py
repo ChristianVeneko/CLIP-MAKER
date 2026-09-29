@@ -96,3 +96,23 @@ def test_json_is_valid_on_disk(tmp_path):
     job = make(store)
     data = json.loads((tmp_path / job["id"] / "job.json").read_text())
     assert data["id"] == job["id"]
+
+
+def test_retry_resets_failed_job_keeping_id(tmp_path):
+    store = JobStore(tmp_path)
+    job = make(store)
+    store.mark_running(job["id"])
+    store.report(job["id"], "select", 0.0)
+    store.mark_failed(job["id"], "boom")
+    assert store.retry(job["id"]) is True
+    j = store.get(job["id"])
+    assert j["status"] == "queued" and j["error"] is None and j["finished_at"] is None
+    assert j["percent"] == 0 and j["stage"] is None
+    assert [s["status"] for s in j["stages"]] == ["pending"] * 4
+
+
+def test_retry_only_failed_jobs(tmp_path):
+    store = JobStore(tmp_path)
+    job = make(store)
+    assert store.retry(job["id"]) is False
+    assert store.retry("aaaaaaaaaaaa") is False

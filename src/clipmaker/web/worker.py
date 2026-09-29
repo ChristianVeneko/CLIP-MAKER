@@ -7,6 +7,7 @@ import threading
 import traceback
 from collections.abc import Callable
 
+from .errors import friendly_error
 from .store import JobStore
 
 Report = Callable[[str, float, str], None]
@@ -62,7 +63,10 @@ class JobWorker:
             traceback.print_exc()
             detail = getattr(exc, "stderr", None)
             text = str(exc).strip() or exc.__class__.__name__
-            if isinstance(detail, str) and detail.strip():
+            friendly = friendly_error(exc)
+            if friendly:
+                text = friendly
+            elif isinstance(detail, str) and detail.strip():
                 text = f"{text} — {detail.strip().splitlines()[-1]}"
             self.store.mark_failed(job_id, text)
         else:

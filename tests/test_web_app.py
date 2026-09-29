@@ -183,3 +183,30 @@ def test_spa_fallback_serves_index_when_built(tmp_path):
     assert client.get("/assets/a.js").status_code == 200
     assert "app" in client.get("/some/route").text
     assert client.get("/api/nothing").status_code == 404
+
+
+def test_retry_failed_job_requeues_same_job(tmp_path):
+    calls = []
+
+    def flaky(job, report, job_dir):
+        calls.append(job["id"])
+        if len(calls) == 1:
+            raise RuntimeError("temporary")
+        return fake_runner(job, report, job_dir)
+
+    client, app = make_client(tmp_path, runner=flaky)
+    jid = run_job(client, app, {"source": URL_SOURCE})
+    assert client.get(f"/api/jobs/{jid}").json()["status"] == "failed"
+    r = client.post(f"/api/jobs/{jid}/retry")
+    assert r.status_code == 200 and r.json()["id"] == jid and r.json()["status"] == "queued"
+    app.state.worker.wait_idle()
+    job = client.get(f"/api/jobs/{jid}").json()
+    assert job["status"] == "done" and job["error"] is None and len(job["clips"]) == 1
+    assert calls == [jid, jid] and len(client.get("/api/jobs").json()) == 1
+
+
+def test_retry_rejects_non_failed_and_unknown(tmp_path):
+    client, app = make_client(tmp_path)
+    jid = run_job(client, app, {"source": URL_SOURCE})
+    assert client.post(f"/api/jobs/{jid}/retry").status_code == 409
+    assert client.post("/api/jobs/aaaaaaaaaaaa/retry").status_code == 404

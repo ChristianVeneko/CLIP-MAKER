@@ -10,13 +10,14 @@ from .captions import ALIASES, PRESETS
 from .download import download_video
 from .moments import parse_time_range
 from .options import ASPECT_RATIOS, CLIP_LENGTHS, GENRES, JobOptions
+from .paths import default_output, default_workdir
 from .pipeline import prepare_transcript, render_clips, select_clips
 from .transcribe import DEFAULT_WHISPER_MODEL, segments_and_words
 
 
 def _common(p: argparse.ArgumentParser) -> None:
-    p.add_argument("--workdir", type=Path, default=Path("workdir"), help="cache directory (default: ./workdir)")
-    p.add_argument("--output", type=Path, default=Path("output"), help="output directory (default: ./output)")
+    p.add_argument("--workdir", type=Path, default=default_workdir(), help="cache directory (default: <project>/workdir)")
+    p.add_argument("--output", type=Path, default=default_output(), help="output directory (default: <project>/output)")
 
 
 def _job_opts(p: argparse.ArgumentParser, render: bool = True, select: bool = True) -> None:

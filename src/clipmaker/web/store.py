@@ -95,6 +95,19 @@ class JobStore:
             fn(job)
             self._write(job)
 
+    def retry(self, job_id: str) -> bool:
+        """Reset a failed job to queued (same id, source and options). False if not failed."""
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None or job["status"] != "failed":
+                return False
+            job.update(
+                status="queued", stage=None, percent=0, message="Queued", error=None, finished_at=None,
+                stages=initial_stages(job["source"]["type"] == "url", not job["options"].get("srt_path")),
+            )
+            self._write(job)
+            return True
+
     def mark_running(self, job_id: str) -> None:
         self._update(job_id, lambda j: j.update(status="running", message="Starting"))
 

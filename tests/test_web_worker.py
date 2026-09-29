@@ -80,3 +80,25 @@ def test_worker_survives_failure_and_continues(tmp_path):
     assert store.get(a["id"])["status"] == "failed"
     assert store.get(b["id"])["status"] == "done"
     worker.stop()
+
+
+def test_worker_stores_friendly_message_for_openai_errors(tmp_path):
+    import httpx
+    import openai
+
+    store = JobStore(tmp_path)
+
+    def runner(job, report):
+        req = httpx.Request("POST", "https://api.openai.com/v1/x")
+        raise openai.PermissionDeniedError(
+            "Error code: 403", response=httpx.Response(403, request=req),
+            body={"code": "unsupported_country_region_territory"},
+        )
+
+    worker = JobWorker(store, runner)
+    worker.start()
+    job = new_job(store)
+    worker.submit(job["id"])
+    worker.wait_idle()
+    worker.stop()
+    assert "VPN" in store.get(job["id"])["error"]

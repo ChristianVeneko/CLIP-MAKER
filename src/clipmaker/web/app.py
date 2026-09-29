@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from ..captions import FONTS_DIR, preset_catalog
 from ..download import probe_url as real_probe_url
+from ..paths import default_output, default_workdir
 from ..options import ASPECT_RATIOS, CLIP_LENGTHS, GENRES, MODEL_DEFAULTS, resolve_model_id
 from ..render import slugify
 from ..selection import LANGUAGE_NAMES
@@ -36,8 +37,8 @@ def default_web_dist() -> Path | None:
 
 @dataclass
 class Settings:
-    workdir: Path = Path("workdir")
-    output_dir: Path = Path("output")
+    workdir: Path = field(default_factory=default_workdir)
+    output_dir: Path = field(default_factory=default_output)
     web_dist: Path | None = field(default_factory=default_web_dist)
 
     @property
@@ -235,6 +236,14 @@ def create_app(settings: Settings | None = None, services: Services | None = Non
     @app.get("/api/jobs/{job_id}")
     def job_status(job_id: str) -> dict:
         return _public(get_job(job_id), detail=True)
+
+    @app.post("/api/jobs/{job_id}/retry")
+    def retry_job(job_id: str) -> dict:
+        job = get_job(job_id)
+        if job["status"] != "failed" or not store.retry(job_id):
+            raise HTTPException(409, "Only failed jobs can be retried")
+        worker.submit(job_id)
+        return _public(store.get(job_id), detail=True)
 
     @app.get("/api/jobs/{job_id}/clips")
     def job_clips(job_id: str) -> list[dict]:
