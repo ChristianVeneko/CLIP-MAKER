@@ -17,6 +17,7 @@ class FaceObs:
     w: float
     h: float
     patch: np.ndarray | None = field(default=None, compare=False, repr=False)  # mouth-region gray patch
+    score: float = 1.0
 
     @property
     def area(self) -> float:
@@ -31,6 +32,22 @@ class Track:
     @property
     def last_index(self) -> int:
         return max(self.obs)
+
+
+def filter_faces(faces: list[FaceObs], min_rel: float = 0.5, min_score: float = 0.0) -> list[FaceObs]:
+    """Drop likely false positives: low score, or much smaller than the largest face in the frame
+    (posters, logos and background photos produce small "faces")."""
+    faces = [f for f in faces if f.score >= min_score]
+    if not faces:
+        return []
+    biggest = max(f.w for f in faces)
+    return [f for f in faces if f.w >= min_rel * biggest]
+
+
+def prune_tracks(tracks: list[Track], min_obs: int = 3) -> list[Track]:
+    """Remove short-lived tracks (flicker); if that would remove everything, keep all."""
+    kept = [t for t in tracks if len(t.obs) >= min_obs]
+    return kept or tracks
 
 
 def build_tracks(

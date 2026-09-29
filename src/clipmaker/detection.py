@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .speaker import FaceObs
+from .speaker import FaceObs, filter_faces
 
 ASSETS = Path(__file__).resolve().parents[2] / "assets"
 YUNET_MODEL = ASSETS / "face_detection_yunet_2023mar.onnx"
@@ -56,26 +56,26 @@ class FaceDetector:
         h, w = frame.shape[:2]
         scale = DETECT_WIDTH / w if w > DETECT_WIDTH else 1.0
         small = cv2.resize(frame, (int(w * scale), int(h * scale))) if scale != 1.0 else frame
-        found: list[tuple[float, float, float, float, tuple | None]] = []
+        found: list[tuple[float, float, float, float, tuple | None, float]] = []
         if self._yunet is not None:
             self._yunet.setInputSize((small.shape[1], small.shape[0]))
             _, det = self._yunet.detect(small)
             for f in det if det is not None else []:
                 lm = f[4:14] / scale
-                found.append((f[0] / scale, f[1] / scale, f[2] / scale, f[3] / scale, ((lm[6], lm[7]), (lm[8], lm[9]))))
+                found.append((f[0] / scale, f[1] / scale, f[2] / scale, f[3] / scale, ((lm[6], lm[7]), (lm[8], lm[9])), float(f[14])))
         else:
             gray_small = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
             for x, y, fw, fh in self._haar.detectMultiScale(gray_small, 1.1, 5, minSize=(30, 30)):
-                found.append((x / scale, y / scale, fw / scale, fh / scale, None))
+                found.append((x / scale, y / scale, fw / scale, fh / scale, None, 1.0))
         if not found:
             return []
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = []
-        for x, y, fw, fh, marks in found:
+        for x, y, fw, fh, marks, score in found:
             if marks is None:  # Haar: assume the mouth sits in the lower third of the face box
                 marks = ((x + fw * 0.28, y + fh * 0.78), (x + fw * 0.72, y + fh * 0.78))
-            faces.append(FaceObs(x + fw / 2, y + fh / 2, fw, fh, self._patch(gray, mouth_roi(*marks))))
-        return faces
+            faces.append(FaceObs(x + fw / 2, y + fh / 2, fw, fh, self._patch(gray, mouth_roi(*marks)), score))
+        return filter_faces(faces, min_score=0.7)
 
     def center_x(self, frame) -> float | None:
         faces = self.detect(frame)

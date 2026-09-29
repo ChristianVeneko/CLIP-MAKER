@@ -177,3 +177,41 @@ class TestCropCenters:
         tracks = build_tracks([[face(400)], [], [face(402)]], max_gap=3)
         xs, _ = crop_centers(tracks, [tracks[0].id] * 3, default_x=960, crop_w=608)
         assert xs[1] == pytest.approx(400, abs=3)
+
+
+class TestFilters:
+    def test_filter_faces_drops_small_false_positives(self):
+        from clipmaker.speaker import filter_faces
+
+        real = [face(400, w=200.0), face(1400, w=190.0)]
+        junk = [face(700, w=35.0), face(600, w=90.0)]
+        assert filter_faces(real + junk) == real
+
+    def test_filter_faces_keeps_single_and_empty(self):
+        from clipmaker.speaker import filter_faces
+
+        assert filter_faces([]) == []
+        only = [face(100, w=30.0)]
+        assert filter_faces(only) == only
+
+    def test_filter_faces_score_threshold(self):
+        from clipmaker.speaker import filter_faces
+
+        a = FaceObs(1, 1, 100, 100, None, score=0.95)
+        b = FaceObs(2, 1, 100, 100, None, score=0.5)
+        assert filter_faces([a, b], min_score=0.7) == [a]
+
+    def test_prune_tracks_removes_short_lived_ones(self):
+        from clipmaker.speaker import prune_tracks
+
+        samples = [[face(300), face(1300)]] * 5 + [[face(300), face(1300), face(800)]] + [[face(300), face(1300)]] * 4
+        tracks = build_tracks(samples)
+        assert len(tracks) == 3
+        kept = prune_tracks(tracks, min_obs=3)
+        assert len(kept) == 2
+
+    def test_prune_keeps_everything_if_all_short(self):
+        from clipmaker.speaker import prune_tracks
+
+        tracks = build_tracks([[face(300)], [face(300)]])
+        assert prune_tracks(tracks, min_obs=5) == tracks

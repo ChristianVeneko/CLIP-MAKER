@@ -8,6 +8,7 @@ from .speaker import (
     build_tracks,
     choose_speakers,
     crop_centers,
+    prune_tracks,
     smooth_energy,
     track_energies,
 )
@@ -27,7 +28,7 @@ def plan_framing(
 ) -> tuple[list[tuple[float, float]], dict]:
     """Return crop-x keypoints (piecewise linear, hard cuts on speaker switches) and diagnostics."""
     n = len(samples)
-    tracks = build_tracks(samples, max_gap=max(2, int(sample_fps)))
+    tracks = prune_tracks(build_tracks(samples, max_gap=max(2, int(sample_fps))), min_obs=max(3, int(sample_fps / 2)))
     default_x = src_w / 2
     dt = 1.0 / sample_fps
     if not tracks:
