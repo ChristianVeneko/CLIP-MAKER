@@ -1,0 +1,8 @@
+workdir/
+output/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+output-horizontal/
+.DS_Store
