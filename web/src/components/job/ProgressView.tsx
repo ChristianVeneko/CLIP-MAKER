@@ -1,13 +1,17 @@
 import type { Job } from "../../api/types";
+import { useElapsed } from "../../hooks/useElapsed";
 import { STATUS_LABELS } from "../../lib/labels";
+import { formatDuration } from "../../lib/time";
 import { StageStepper } from "./StageStepper";
 
 interface Props {
   job: Job;
+  onRetry?: () => void;
 }
 
-export function ProgressView({ job }: Props) {
+export function ProgressView({ job, onRetry }: Props) {
   const failed = job.status === "failed";
+  const elapsed = useElapsed(job.stage, job.status === "running");
   return (
     <section className="panel progress" aria-live="polite">
       <div className="progress-head">
@@ -29,13 +33,18 @@ export function ProgressView({ job }: Props) {
         <div className={`bar-fill${failed ? " is-failed" : ""}`} style={{ width: `${job.percent}%` }} />
       </div>
       <div className="progress-foot">
-        <span className="muted">{failed ? "Se detuvo el proceso" : job.message}</span>
+        <span className="muted">{failed ? "Se detuvo el proceso" : job.status === "running" && elapsed >= 5 ? `${job.message} · ${formatDuration(elapsed)}` : job.message}</span>
         <strong>{job.percent}%</strong>
       </div>
       {failed && (
         <div className="banner banner-error" role="alert">
           <span aria-hidden>⚠</span>
           <div>{job.error ?? "Ocurrió un error inesperado."}</div>
+          {onRetry && (
+            <button className="btn btn-sm" onClick={onRetry}>
+              Reintentar
+            </button>
+          )}
         </div>
       )}
     </section>

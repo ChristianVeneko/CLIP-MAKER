@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { Job } from "../api/types";
 
@@ -8,11 +8,11 @@ const POLL_MS = 1500;
 export function useJob(id: string) {
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    setJob(null);
     setError(null);
     const tick = async () => {
       try {
@@ -31,7 +31,18 @@ export function useJob(id: string) {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
+  }, [id, attempt]);
+
+  /** Re-queues a failed job and resumes polling. */
+  const retry = useCallback(async () => {
+    try {
+      setJob(await api.retryJob(id));
+      setError(null);
+      setAttempt((n) => n + 1);
+    } catch (e) {
+      setError((e as Error).message);
+    }
   }, [id]);
 
-  return { job, error };
+  return { job, error, retry };
 }

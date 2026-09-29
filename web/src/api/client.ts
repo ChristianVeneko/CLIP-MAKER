@@ -80,6 +80,7 @@ export const api = {
   createJob: (source: VideoSource, settings: JobSettings) =>
     request<Job>("/api/jobs", json(buildCreateJobBody(source, settings))),
   job: (id: string) => request<Job>(`/api/jobs/${id}`),
+  retryJob: (id: string) => request<Job>(`/api/jobs/${id}/retry`, { method: "POST" }),
   jobs: () => request<JobSummary[]>("/api/jobs"),
   clips: (id: string) => request<Clip[]>(`/api/jobs/${id}/clips`),
 };

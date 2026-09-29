@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { JobSummary } from "../api/types";
 
 export function useRecentJobs() {
   const [jobs, setJobs] = useState<JobSummary[]>([]);
+  const [nonce, setNonce] = useState(0);
+  const reload = useCallback(() => setNonce((n) => n + 1), []);
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -22,6 +24,6 @@ export function useRecentJobs() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, []);
-  return jobs;
+  }, [nonce]);
+  return { jobs, reload };
 }

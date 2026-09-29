@@ -4,9 +4,10 @@ import { STATUS_LABELS } from "../../lib/labels";
 interface Props {
   jobs: JobSummary[];
   onOpen: (id: string) => void;
+  onRetry: (id: string) => void;
 }
 
-export function RecentJobs({ jobs, onOpen }: Props) {
+export function RecentJobs({ jobs, onOpen, onRetry }: Props) {
   if (jobs.length === 0) return null;
   return (
     <section className="recent" aria-label="Trabajos recientes">
@@ -15,7 +16,7 @@ export function RecentJobs({ jobs, onOpen }: Props) {
         {jobs.slice(0, 8).map((j) => {
           const thumb = j.cover ?? j.source.thumbnail;
           return (
-            <li key={j.id}>
+            <li key={j.id} className="recent-row">
               <button className="recent-item" onClick={() => onOpen(j.id)}>
                 {thumb ? <img src={thumb} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span className="recent-ph" />}
                 <span className="recent-info">
@@ -23,9 +24,15 @@ export function RecentJobs({ jobs, onOpen }: Props) {
                   <span className="muted">
                     {j.status === "done" ? `${j.clip_count} clips` : j.status === "running" ? `${j.percent}%` : ""}
                   </span>
+                  {j.status === "failed" && j.error && <span className="recent-error">{j.error}</span>}
                 </span>
                 <span className={`status-pill is-${j.status}`}>{STATUS_LABELS[j.status]}</span>
               </button>
+              {j.status === "failed" && (
+                <button className="btn btn-sm" onClick={() => onRetry(j.id)}>
+                  Reintentar
+                </button>
+              )}
             </li>
           );
         })}
