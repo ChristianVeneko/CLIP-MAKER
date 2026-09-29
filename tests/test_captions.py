@@ -82,6 +82,12 @@ class TestRegistry:
         assert mozi["font_family"] == "Montserrat"
         assert re.fullmatch(r"#[0-9A-F]{6}", mozi["colors"]["active"])
 
+    def test_catalog_exposes_metrics_for_web_samples(self):
+        for c in preset_catalog():
+            assert {"size_ratio", "outline_ratio", "shadow_ratio", "pop"} <= set(c)
+        mozi = next(c for c in preset_catalog() if c["id"] == "mozi")
+        assert mozi["outline_ratio"] > 0 and mozi["size_ratio"] > 0
+
 
 class TestGeometry:
     def test_rounded_rect_path(self):

@@ -133,13 +133,15 @@ def preset_catalog() -> list[dict]:
                 "id": p.id, "name": p.name, "font_family": p.font_family, "font_file": p.font_file,
                 "font_weight_hint": p.font, "uppercase": p.uppercase, "max_lines": p.max_lines,
                 "max_words": p.max_words, "italic": p.italic, "fill_mode": p.fill_mode,
-                "box": p.box, "colors": colors,
+                "box": p.box, "colors": colors, "size_ratio": p.size_ratio,
+                "outline_ratio": p.outline_ratio, "shadow_ratio": p.shadow_ratio, "pop": p.pop,
             }
         )  # fmt: skip
     out.append(
         {"id": NONE, "name": "None", "font_family": "", "font_file": "", "font_weight_hint": "",
          "uppercase": False, "max_lines": 0, "max_words": 0, "italic": False, "fill_mode": "none",
-         "box": "none", "colors": {}}
+         "box": "none", "colors": {}, "size_ratio": 0.0, "outline_ratio": 0.0,
+         "shadow_ratio": 0.0, "pop": "none"}
     )  # fmt: skip
     return out
 
