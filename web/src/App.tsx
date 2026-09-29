@@ -5,7 +5,7 @@ import { useHashRoute } from "./hooks/useHashRoute";
 
 export function App() {
   const { config, error } = useConfig();
-  const [, navigate] = useHashRoute();
+  const [route, navigate] = useHashRoute();
   return (
     <>
       <Header onHome={() => navigate({ name: "create" })} />
@@ -14,7 +14,9 @@ export function App() {
           No se pudo cargar la configuración: {error}
         </p>
       )}
-      {config && <CreateJobContainer config={config} />}
+      {config && route.name === "create" && (
+        <CreateJobContainer config={config} onJobCreated={(id) => navigate({ name: "job", id })} />
+      )}
       <footer className="page-footer container">ClipMaker · procesamiento local</footer>
     </>
   );
