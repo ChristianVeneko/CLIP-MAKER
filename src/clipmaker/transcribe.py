@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 from .selection import Segment
@@ -11,23 +12,60 @@ from .subtitles import Word
 DEFAULT_WHISPER_MODEL = "mlx-community/whisper-large-v3-turbo"
 
 
-def transcribe_video(source: Path, out_json: Path, model: str = DEFAULT_WHISPER_MODEL) -> dict:
-    if out_json.exists():
-        print(f"[transcribe] cached: {out_json}")
-        return json.loads(out_json.read_text(encoding="utf-8"))
+def whisper_language(language: str) -> str | None:
+    """``auto`` -> None (let whisper detect), otherwise the lower-cased code."""
+    lang = language.strip().lower()
+    return None if lang in ("", "auto") else lang
+
+
+def transcript_cache_name(time_range: tuple[float, float] | None, language: str) -> str:
+    """Cache file name, distinct per language and time range (full/auto keeps ``transcript.json``)."""
+    parts = ["transcript"]
+    lang = whisper_language(language)
+    if lang:
+        parts.append(lang)
+    if time_range:
+        parts.append(f"r{time_range[0]:g}-{time_range[1]:g}")
+    return ".".join(parts) + ".json"
+
+
+def offset_transcript(data: dict, offset: float) -> dict:
+    """Return a copy of a transcript with every timestamp shifted by ``offset`` seconds."""
+    if not offset:
+        return data
+    out = {**data, "segments": []}
+    for seg in data["segments"]:
+        new = {**seg, "start": seg["start"] + offset, "end": seg["end"] + offset}
+        if "words" in seg:
+            new["words"] = [{**w, "start": w["start"] + offset, "end": w["end"] + offset} for w in seg["words"]]
+        out["segments"].append(new)
+    return out
+
+
+def audio_cut_command(ffmpeg: str, source: str, output: str, start: float, end: float) -> list[str]:
+    """ffmpeg command extracting [start, end] as 16 kHz mono wav (the format whisper wants)."""
+    return [
+        ffmpeg, "-hide_banner", "-loglevel", "error", "-nostats", "-y",
+        "-ss", f"{start:.3f}", "-i", source, "-t", f"{end - start:.3f}",
+        "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", output,
+    ]  # fmt: skip
+
+
+def _run_whisper(audio: str, model: str, language: str) -> dict:
     import mlx_whisper
 
-    print(f"[transcribe] running {model} (language=es) ...")
+    lang = whisper_language(language)
+    print(f"[transcribe] running {model} (language={lang or 'auto'}) ...")
     result = mlx_whisper.transcribe(
-        str(source),
+        audio,
         path_or_hf_repo=model,
-        language="es",
+        language=lang,
         word_timestamps=True,
         condition_on_previous_text=False,
         verbose=None,
     )
-    data = {
-        "language": result.get("language", "es"),
+    return {
+        "language": result.get("language", lang or "und"),
         "model": model,
         "text": result.get("text", ""),
         "segments": [
@@ -45,6 +83,38 @@ def transcribe_video(source: Path, out_json: Path, model: str = DEFAULT_WHISPER_
             for s in result["segments"]
         ],
     }  # fmt: skip
+
+
+def transcribe_video(
+    source: Path,
+    out_json: Path,
+    model: str = DEFAULT_WHISPER_MODEL,
+    language: str = "auto",
+    time_range: tuple[float, float] | None = None,
+) -> dict:
+    """Transcribe (cached). With ``time_range`` only that portion is cut and transcribed,
+    and timestamps are re-offset so they stay in source time."""
+    if out_json.exists():
+        print(f"[transcribe] cached: {out_json}")
+        return json.loads(out_json.read_text(encoding="utf-8"))
+    if time_range is None:
+        legacy = out_json.parent / "transcript.json"
+        if legacy != out_json and legacy.exists():
+            cached = json.loads(legacy.read_text(encoding="utf-8"))
+            if cached.get("language") == whisper_language(language):
+                print(f"[transcribe] cached: {legacy}")
+                return cached
+    if time_range is None:
+        data = _run_whisper(str(source), model, language)
+    else:
+        from .render import find_ffmpeg
+
+        wav = out_json.with_suffix(".wav")
+        subprocess.run(audio_cut_command(find_ffmpeg(), str(source), str(wav), *time_range), check=True)
+        try:
+            data = offset_transcript(_run_whisper(str(wav), model, language), time_range[0])
+        finally:
+            wav.unlink(missing_ok=True)
     out_json.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     return data
 
