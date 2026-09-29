@@ -130,3 +130,76 @@ class TestLoadClipsFile:
         f.write_text('{"nope":1}')
         with pytest.raises(ValueError):
             load_clips_file(f)
+
+
+class TestPromptOptions:
+    def test_every_genre_has_a_hint_and_is_injected(self):
+        from clipmaker.options import GENRES
+        from clipmaker.selection import GENRE_HINTS
+
+        assert set(GENRES) <= set(GENRE_HINTS)
+        seen = set()
+        for g in GENRES:
+            p = build_prompt(3, 20, 60, genre=g)
+            assert GENRE_HINTS[g] in p
+            seen.add(GENRE_HINTS[g])
+        assert len(seen) == len(GENRES)  # hints are genre specific
+
+    def test_language_names_and_auto(self):
+        assert "Spanish" in build_prompt(3, 20, 60, language="es")
+        p = build_prompt(3, 20, 60, language="en")
+        assert "English" in p and "Spanish" not in p
+        auto = build_prompt(3, 20, 60, language="auto")
+        assert "same language as the transcript" in auto
+        assert "Portuguese" in build_prompt(3, 20, 60, language="pt")
+
+    def test_specific_moments_injected(self):
+        p = build_prompt(3, 20, 60, specific_moments="cuando hablan de Bad Bunny")
+        assert "cuando hablan de Bad Bunny" in p
+        assert "cuando hablan" not in build_prompt(3, 20, 60)
+
+    def test_default_prompt_unchanged_contract(self):
+        p = build_prompt(5, 20, 60)
+        assert "Spanish" in p and "at most 5" in p
+
+
+class TestForcedClips:
+    def test_forced_clips_keep_requested_range(self):
+        from clipmaker.selection import forced_clips
+
+        words = uniform_words(200)
+        clips = forced_clips([(30.0, 75.0)], words)
+        assert len(clips) == 1
+        assert clips[0].start == pytest.approx(30.0, abs=0.6) and clips[0].end == pytest.approx(75.0, abs=1.0)
+        assert clips[0].score == 100 and "0:30" in clips[0].title
+
+    def test_forced_ranges_are_not_length_clamped_and_are_bounded_by_video(self):
+        from clipmaker.selection import forced_clips
+
+        words = uniform_words(100)
+        clips = forced_clips([(10.0, 15.0), (90.0, 500.0)], words)
+        assert clips[0].end - clips[0].start >= 4  # 5 s is allowed even if shorter than min
+        assert clips[1].end <= words[-1].end + 1e-6
+
+    def test_invalid_ranges_dropped(self):
+        from clipmaker.selection import forced_clips
+
+        assert forced_clips([(50.0, 50.0), (500.0, 600.0)], uniform_words(100)) == []
+
+    def test_merge_keeps_forced_first_and_drops_overlaps(self):
+        from clipmaker.selection import merge_clips
+
+        forced = [Clip(start=10, end=40, title="F", score=100)]
+        auto = [
+            Clip(start=30, end=60, title="overlaps", score=90),
+            Clip(start=100, end=130, title="A", score=80),
+            Clip(start=200, end=230, title="B", score=70),
+        ]
+        out = merge_clips(forced, auto, max_clips=2)
+        assert [c.title for c in out] == ["F", "A"]
+
+    def test_merge_never_drops_forced(self):
+        from clipmaker.selection import merge_clips
+
+        forced = [Clip(start=i * 100, end=i * 100 + 30, title=f"F{i}", score=100) for i in range(3)]
+        assert len(merge_clips(forced, [], max_clips=1)) == 3

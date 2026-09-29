@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from .subtitles import SENTENCE_END, Word
 
-DEFAULT_MODEL = "gpt-5"
+DEFAULT_MODEL = "gpt-5.6-sol"  # legacy fallback; JobOptions resolves the real id
 SNAP_TOLERANCE = 2.5  # seconds
 PAD_START = 0.10
 PAD_END = 0.25
@@ -36,8 +36,8 @@ class Clip(BaseModel):
 class LLMClip(BaseModel):
     start: float = Field(description="Clip start in seconds (from the transcript timestamps)")
     end: float = Field(description="Clip end in seconds")
-    title: str = Field(description="Catchy title in Spanish")
-    hook: str = Field(description="Why this clip is viral / the hook, in Spanish")
+    title: str = Field(description="Catchy title in the requested output language")
+    hook: str = Field(description="Why this clip is viral / the hook, in the requested output language")
     score: int = Field(description="Virality score from 0 to 100")
 
 
@@ -49,20 +49,112 @@ def format_transcript(segments: list[Segment]) -> str:
     return "\n".join(f"[{s.start:.1f}-{s.end:.1f}] {s.text.strip()}" for s in segments)
 
 
-def build_prompt(count: int, min_duration: float, max_duration: float) -> str:
-    return (
+GENRE_HINTS: dict[str, str] = {
+    "podcast": "Podcast: favour hot takes, funny or heated exchanges, personal stories and quotable one-liners; "
+    "keep enough context so a listener who never heard the episode understands the exchange.",
+    "interview": "Interview: favour the guest's most revealing answers, surprising admissions and strong "
+    "opinions; include the interviewer's question when the answer needs it.",
+    "educational": "Educational: favour a single clear insight, a myth-busting statement or a step-by-step "
+    "explanation that pays off in its last sentence; avoid clips that need earlier definitions.",
+    "comedy": "Comedy: favour complete jokes and bits with setup AND punchline; end right after the laugh "
+    "or the punchline lands.",
+    "motivational": "Motivational: favour emotional peaks, powerful reframes and quotable lines that inspire "
+    "action; end on the strongest statement.",
+    "gaming": "Gaming: favour big reactions, clutch plays, fails and funny commentary; the payoff must be "
+    "clear from the speech alone.",
+    "sports": "Sports: favour decisive plays, heated debates, bold predictions and emotional reactions.",
+    "news": "News: favour the single most newsworthy fact, a striking quote or a clear explanation of why "
+    "it matters; stay neutral and avoid clips that depend on unresolved context.",
+    "vlog": "Vlog: favour surprising events, candid personal moments, strong emotions and relatable "
+    "observations.",
+    "other": "General content: favour the most engaging, self-contained and emotionally strong moments.",
+}
+
+LANGUAGE_NAMES = {
+    "es": "Spanish", "en": "English", "pt": "Portuguese", "fr": "French", "it": "Italian",
+    "de": "German", "nl": "Dutch", "ca": "Catalan", "ja": "Japanese", "ko": "Korean",
+    "zh": "Chinese", "ru": "Russian", "ar": "Arabic", "hi": "Hindi", "tr": "Turkish", "pl": "Polish",
+}  # fmt: skip
+
+
+def language_name(code: str) -> str | None:
+    """English name of a language code, or ``None`` for ``auto``/unknown."""
+    return LANGUAGE_NAMES.get(code.strip().lower())
+
+
+def build_prompt(
+    count: int,
+    min_duration: float,
+    max_duration: float,
+    genre: str = "podcast",
+    language: str = "es",
+    specific_moments: str = "",
+) -> str:
+    lang = language_name(language)
+    transcript_lang = f"{lang} " if lang else ""
+    output_lang = lang or "the same language as the transcript"
+    prompt = (
         "You are an expert short-form video editor (TikTok, Reels, YouTube Shorts). "
-        "You receive the timestamped Spanish transcript of a long video. "
+        f"You receive the timestamped {transcript_lang}transcript of a long video. "
         f"Pick the {count} best self-contained moments most likely to go viral as short clips.\n"
+        f"Genre guidance. {GENRE_HINTS.get(genre, GENRE_HINTS['other'])}\n"
         "Rules:\n"
         f"- Each clip must last between {min_duration:g} and {max_duration:g} seconds.\n"
         "- Clips must not overlap and must start/end on natural sentence boundaries.\n"
         "- Start with a strong hook (a bold claim, a question, a surprising fact or emotional peak) "
         "and end on a satisfying conclusion; it must make sense without the rest of the video.\n"
         "- Use the exact timestamps (in seconds) shown in the transcript brackets.\n"
-        "- Write `title` and `hook` in Spanish. `score` is an integer 0-100 for viral potential.\n"
-        f"Return at most {count} clips."
+        f"- Write `title` and `hook` in {output_lang}. `score` is an integer 0-100 for viral potential.\n"
     )
+    if specific_moments.strip():
+        prompt += (
+            "- The user asked for these specific moments; prioritise them when they exist in the "
+            f"transcript: {specific_moments.strip()}\n"
+        )
+    return prompt + f"Return at most {count} clips."
+
+
+def _fmt_time(seconds: float) -> str:
+    s = int(seconds)
+    h, m, sec = s // 3600, (s % 3600) // 60, s % 60
+    return f"{h}:{m:02d}:{sec:02d}" if h else f"{m}:{sec:02d}"
+
+
+def forced_clips(ranges: list[tuple[float, float]], words: list[Word]) -> list[Clip]:
+    """Clips for explicit user ranges: kept as requested, only snapped to nearby word edges."""
+    words = sorted(words, key=lambda w: w.start)
+    video_end = words[-1].end if words else None
+    starts = [w.start for w in words]
+    ends = [w.end for w in words]
+    out: list[Clip] = []
+    for start, end in ranges:
+        start = max(0.0, start)
+        if video_end is not None:
+            end = min(end, video_end)
+        if end - start < 1.0 or (video_end is not None and start >= video_end):
+            continue
+        start = _nearest(starts, start, 0.6) or start
+        end = _nearest(ends, end, 0.6) or end
+        out.append(
+            Clip(
+                start=round(start, 3), end=round(end, 3),
+                title=f"Moment {_fmt_time(start)}-{_fmt_time(end)}",
+                hook="Requested moment", score=100,
+            )
+        )  # fmt: skip
+    return out
+
+
+def merge_clips(forced: list[Clip], auto: list[Clip], max_clips: int) -> list[Clip]:
+    """Forced clips first (never dropped); then non-overlapping auto clips up to ``max_clips`` total."""
+    kept = list(forced)
+    for c in sorted(auto, key=lambda x: x.score, reverse=True):
+        if len(kept) >= max(max_clips, len(forced)):
+            break
+        if any(_overlaps(c, k) for k in kept):
+            continue
+        kept.append(c)
+    return kept
 
 
 def select_with_openai(
@@ -71,6 +163,9 @@ def select_with_openai(
     min_duration: float,
     max_duration: float,
     model: str | None = None,
+    genre: str = "podcast",
+    language: str = "es",
+    specific_moments: str = "",
 ) -> list[Clip]:
     """Ask OpenAI for clip candidates using Structured Outputs (Responses API)."""
     from openai import OpenAI  # imported lazily so the rest works without a key
@@ -83,7 +178,7 @@ def select_with_openai(
     response = client.responses.parse(
         model=model or os.environ.get("OPENAI_MODEL", DEFAULT_MODEL),
         input=[
-            {"role": "system", "content": build_prompt(count, min_duration, max_duration)},
+            {"role": "system", "content": build_prompt(count, min_duration, max_duration, genre, language, specific_moments)},
             {"role": "user", "content": transcript_text},
         ],
         text_format=LLMSelection,
