@@ -9,7 +9,7 @@ from pathlib import Path
 from .download import download_video
 from .pipeline import render_clips, select_clips
 from .render import HORIZONTAL, VERTICAL  # noqa: F401
-from .subtitles import STYLE_PRESETS
+from .captions import ALIASES, PRESETS
 from .transcribe import DEFAULT_WHISPER_MODEL, segments_and_words, transcribe_video
 
 
@@ -29,7 +29,7 @@ def _selection_opts(p: argparse.ArgumentParser) -> None:
 def _render_opts(p: argparse.ArgumentParser) -> None:
     p.add_argument("--format", choices=["vertical", "horizontal"], default="vertical",
                    help="vertical = 1080x1920 (9:16), horizontal = 1920x1080 (16:9)")  # fmt: skip
-    p.add_argument("--style", choices=sorted(STYLE_PRESETS), default="bold-yellow", help="subtitle style preset")
+    p.add_argument("--style", choices=sorted([*PRESETS, *ALIASES, "none"]), default="mozi", help="subtitle style preset")
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -122,3 +122,23 @@ def render_clip(
         subprocess.run(cmd, check=True)
     finally:
         script.unlink(missing_ok=True)
+
+
+def build_frame_command(ffmpeg: str, source: str, output: str, at: float, video_filter: str) -> list[str]:
+    """Extract one frame at ``at`` seconds; PTS is shifted back so subtitle times stay absolute."""
+    return [
+        ffmpeg, "-hide_banner", "-loglevel", "error", "-nostats", "-y",
+        "-ss", f"{at:.3f}", "-i", source,
+        "-vf", f"setpts=PTS+{at:g}/TB,{video_filter}",
+        "-frames:v", "1", output,
+    ]  # fmt: skip
+
+
+def render_frame(
+    source: Path, out_png: Path, at: float, video_filter: str, ass_path: Path | None, fonts_dir: Path | None
+) -> None:
+    graph = video_filter
+    if ass_path is not None:
+        graph += "," + subtitle_filter(str(ass_path.resolve()), str(fonts_dir.resolve()) if fonts_dir else None)
+    out_png.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(build_frame_command(find_ffmpeg(), str(source), str(out_png), at, graph), check=True)

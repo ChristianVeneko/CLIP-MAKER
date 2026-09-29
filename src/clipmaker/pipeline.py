@@ -16,9 +16,8 @@ from .render import (
     vertical_filter,
 )
 from .selection import Clip, Segment, format_transcript, load_clips_file, postprocess_clips, select_with_openai
-from .subtitles import Word, build_ass, get_style
-
-FONTS_DIR = Path(__file__).resolve().parents[2] / "assets" / "fonts"
+from .captions import FONTS_DIR, build_captions
+from .subtitles import Word
 
 
 def select_clips(
@@ -55,7 +54,6 @@ def render_clips(
     style_name: str,
     sample_fps: float = 3.0,
 ) -> list[Path]:
-    style = get_style(style_name)
     out_w, out_h = VERTICAL if fmt == "vertical" else HORIZONTAL
     src_w, src_h, _, _ = probe_video(source)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -77,7 +75,7 @@ def render_clips(
         else:
             vf = horizontal_filter(out_w, out_h)
         ass.write_text(
-            build_ass(words, style, out_w, out_h, clip_start=clip.start, clip_end=clip.end),
+            build_captions(words, style_name, out_w, out_h, clip_start=clip.start, clip_end=clip.end),
             encoding="utf-8",
         )
         render_clip(source, mp4, ass, clip.start, duration, vf, FONTS_DIR if FONTS_DIR.exists() else None)

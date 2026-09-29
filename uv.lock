@@ -98,6 +98,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "fonttools" },
     { name = "imageio-ffmpeg" },
     { name = "mlx-whisper" },
     { name = "numpy" },
@@ -111,7 +112,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "fonttools" },
     { name = "httpx" },
     { name = "pytest" },
 ]
@@ -119,6 +119,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.142.0" },
+    { name = "fonttools", specifier = ">=4.66.1" },
     { name = "imageio-ffmpeg", specifier = ">=0.5.1" },
     { name = "mlx-whisper", specifier = ">=0.4.2" },
     { name = "numpy", specifier = ">=1.26" },
@@ -132,7 +133,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "fonttools", specifier = ">=4.66.1" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "pytest", specifier = ">=8" },
 ]

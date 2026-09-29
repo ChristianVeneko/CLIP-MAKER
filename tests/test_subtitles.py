@@ -1,13 +1,10 @@
 import pytest
 
 from clipmaker.subtitles import (
-    STYLE_PRESETS,
     Word,
-    build_ass,
     chunk_words,
     escape_ass_text,
     format_ass_time,
-    get_style,
     rebase_words,
 )
 
@@ -90,68 +87,3 @@ class TestRebase:
     def test_clamps_end_to_clip(self):
         out = rebase_words([w("a", 12.5, 14.0)], clip_start=10.0, clip_end=13.0)
         assert out[0].end == pytest.approx(3.0)
-
-
-class TestStyles:
-    def test_has_at_least_two_presets(self):
-        assert {"bold-yellow", "clean-white"} <= set(STYLE_PRESETS)
-
-    def test_unknown_style(self):
-        with pytest.raises(ValueError):
-            get_style("nope")
-
-
-class TestBuildAss:
-    words = [w("hola", 0.0, 0.4), w("mundo", 0.4, 0.9), w("cruel", 1.0, 1.5)]
-
-    def test_structure(self):
-        ass = build_ass(self.words, get_style("bold-yellow"), 1080, 1920)
-        assert "[Script Info]" in ass and "[V4+ Styles]" in ass and "[Events]" in ass
-        assert "PlayResX: 1080" in ass and "PlayResY: 1920" in ass
-        assert ass.count("Dialogue:") == 3  # one event per word
-
-    def test_uppercase(self):
-        ass = build_ass(self.words, get_style("bold-yellow"), 1080, 1920)
-        assert "HOLA" in ass and "hola" not in ass
-
-    def test_active_word_highlighted(self):
-        style = get_style("bold-yellow")
-        ass = build_ass(self.words, style, 1080, 1920)
-        first = [l for l in ass.splitlines() if l.startswith("Dialogue:")][0]
-        assert style.highlight_color in first
-        assert "\\t(" in first  # pop animation
-
-    def test_events_do_not_overlap(self):
-        ass = build_ass(self.words, get_style("clean-white"), 1920, 1080)
-        times = []
-        for l in ass.splitlines():
-            if l.startswith("Dialogue:"):
-                parts = l.split(",", 9)
-                times.append((parts[1], parts[2]))
-        assert times[0] == ("0:00:00.00", "0:00:00.40")
-        assert times[1][0] == "0:00:00.40"
-
-    def test_vertical_margin_lower_third(self):
-        v = build_ass(self.words, get_style("bold-yellow"), 1080, 1920)
-        h = build_ass(self.words, get_style("bold-yellow"), 1920, 1080)
-        def margin_v(ass):
-            line = [l for l in ass.splitlines() if l.startswith("Style:")][0]
-            return int(line.split(",")[21])
-        assert margin_v(v) > margin_v(h)
-        assert margin_v(v) == pytest.approx(1920 * 0.28, abs=2)
-
-    def test_font_in_style(self):
-        ass = build_ass(self.words, get_style("bold-yellow"), 1080, 1920)
-        assert "Montserrat Black" in ass
-
-    def test_rebased_times(self):
-        words = [w("hola", 100.0, 100.4)]
-        ass = build_ass(words, get_style("bold-yellow"), 1080, 1920, clip_start=100.0, clip_end=110.0)
-        assert "0:00:00.00,0:00:00.40" in ass or "0:00:00.00,0:00:00.5" in ass
-
-    def test_last_word_extended_but_bounded(self):
-        # a lone chunk: last word may linger slightly but never past the clip end
-        words = [w("fin", 9.9, 10.0)]
-        ass = build_ass(words, get_style("bold-yellow"), 1080, 1920, clip_start=0.0, clip_end=10.05)
-        end = [l for l in ass.splitlines() if l.startswith("Dialogue:")][0].split(",")[2]
-        assert end <= "0:00:10.05"

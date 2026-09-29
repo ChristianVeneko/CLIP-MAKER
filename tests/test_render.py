@@ -66,3 +66,13 @@ class TestCommand:
         cmd = self.base()
         assert cmd[-1] == "out.mp4"
         assert "-y" in cmd
+
+
+def test_build_frame_command_absolute_timestamps():
+    from clipmaker.render import build_frame_command
+
+    cmd = build_frame_command("ffmpeg", "in.mp4", "out.png", 12.5, "scale=10:10")
+    assert cmd[cmd.index("-ss") + 1] == "12.500"
+    vf = cmd[cmd.index("-vf") + 1]
+    assert vf.startswith("setpts=PTS+12.5/TB,") and vf.endswith("scale=10:10")
+    assert "-frames:v" in cmd and cmd[-1] == "out.png"
