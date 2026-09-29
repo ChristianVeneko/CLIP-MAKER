@@ -12,10 +12,17 @@ dependencies = [
     "numpy>=1.26",
     "opencv-python>=4.9",
     "imageio-ffmpeg>=0.5.1",
+    "fastapi>=0.142.0",
+    "uvicorn[standard]>=0.54.0",
+    "python-multipart>=0.0.32",
 ]
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = [
+    "fonttools>=4.66.1",
+    "httpx>=0.28.1",
+    "pytest>=8",
+]
 
 [project.scripts]
 clipmaker = "clipmaker.cli:main"
