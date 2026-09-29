@@ -115,3 +115,51 @@ def crop_x_expression(keypoints: list[tuple[float, float]]) -> str:
         sign = "+" if delta > 0 else "-"
         terms.append(f"{sign}{abs(delta):g}*clip((t-{t0:g})/{t1 - t0:g},0,1)")
     return "".join(terms)
+
+
+def smooth_segments(xs: list[float], cuts: list[bool], deadzone: float, window: int = 5) -> list[float]:
+    """Dead-zone + moving-average smoothing applied independently inside each cut-free run."""
+    out: list[float] = []
+    bounds = [0] + [i for i, c in enumerate(cuts) if c] + [len(xs)]
+    for a, b in zip(bounds, bounds[1:]):
+        if b > a:
+            out.extend(moving_average(apply_deadzone(list(xs[a:b]), deadzone), window))
+    return out
+
+
+def build_cut_keypoints(
+    times: list[float],
+    xs: list[float],
+    cuts: list[bool],
+    duration: float,
+    step: float = 0.5,
+    cut_len: float = 0.001,
+) -> list[tuple[float, float]]:
+    """Like :func:`build_keypoints`, but a ``True`` in ``cuts`` makes the window jump (hard cut)."""
+    if not any(cuts) or not times:
+        return build_keypoints(times, xs, duration, step)
+    bounds = [0] + [i for i, c in enumerate(cuts) if c] + [len(times)]
+    points: list[tuple[float, float]] = []
+
+    def add(t: float, x: float) -> None:
+        t = round(t, 4)
+        if not points or t > points[-1][0]:
+            points.append((t, x))
+
+    for a, b in zip(bounds, bounds[1:]):
+        first = a == 0
+        last = b == len(times)
+        t_start = 0.0 if first else times[a] + cut_len
+        t_end = duration if last else times[b]
+        seg_t, seg_x = times[a:b], xs[a:b]
+
+        def value(t: float) -> float:
+            return seg_x[min(range(len(seg_t)), key=lambda i: abs(seg_t[i] - t))]
+
+        add(t_start, value(t_start))
+        k = int(t_start // step) + 1
+        while k * step < t_end:
+            add(k * step, value(k * step))
+            k += 1
+        add(t_end, value(t_end))
+    return points

@@ -113,3 +113,52 @@ class TestKeypointsAndExpression:
     def test_expression_has_no_shell_or_filter_specials(self):
         expr = crop_x_expression([(0.0, 0), (1.0, 10), (2.0, 5)])
         assert "'" not in expr and ":" not in expr
+
+
+class TestCutAwareFraming:
+    def test_smooth_segments_does_not_blend_across_cuts(self):
+        from clipmaker.cropping import smooth_segments
+
+        xs = [400.0] * 4 + [1400.0] * 4
+        cuts = [False] * 4 + [True] + [False] * 3
+        out = smooth_segments(xs, cuts, deadzone=10, window=3)
+        assert out[:4] == [400.0] * 4 and out[4:] == [1400.0] * 4
+
+    def test_smooth_segments_smooths_within_segment(self):
+        from clipmaker.cropping import smooth_segments
+
+        xs = [400, 400, 500, 400, 400]
+        out = smooth_segments(xs, [False] * 5, deadzone=200, window=3)
+        assert max(out) - min(out) == 0  # jitter inside the dead zone is ignored
+
+    def test_cut_keypoints_step_at_the_cut(self):
+        from clipmaker.cropping import build_cut_keypoints, interpolate
+
+        times = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5]
+        xs = [100, 100, 100, 900, 900, 900]
+        cuts = [False, False, False, True, False, False]
+        kps = build_cut_keypoints(times, xs, cuts, duration=3.0, step=0.5)
+        assert interpolate(kps, 1.0) == 100
+        assert interpolate(kps, 1.49) == 100
+        assert interpolate(kps, 1.51) == 900  # hard cut, no pan
+        assert interpolate(kps, 3.0) == 900
+        assert all(t1 > t0 for (t0, _), (t1, _) in zip(kps, kps[1:]))
+
+    def test_cut_keypoints_without_cuts_match_plain_keypoints(self):
+        from clipmaker.cropping import build_cut_keypoints, build_keypoints
+
+        times = [0.0, 0.5, 1.0]
+        xs = [10, 20, 30]
+        assert build_cut_keypoints(times, xs, [False] * 3, 1.0, 0.5) == build_keypoints(times, xs, 1.0, 0.5)
+
+    def test_cut_expression_is_a_near_instant_ramp(self):
+        from clipmaker.cropping import build_cut_keypoints, crop_x_expression
+
+        kps = build_cut_keypoints([0.0, 1.0], [100, 900], [False, True], 2.0, 0.5)
+        expr = crop_x_expression(kps)
+        assert "clip((t-1)/0.001,0,1)" in expr
+
+    def test_crop_width_for_aspects(self):
+        assert crop_width_for(1080, 1.0) == 1080
+        assert crop_width_for(1080, 4 / 5) == 864
+        assert crop_width_for(1080, 9 / 16) == 606
