@@ -76,3 +76,32 @@ def test_build_frame_command_absolute_timestamps():
     vf = cmd[cmd.index("-vf") + 1]
     assert vf.startswith("setpts=PTS+12.5/TB,") and vf.endswith("scale=10:10")
     assert "-frames:v" in cmd and cmd[-1] == "out.png"
+
+
+class TestZoomFilters:
+    def test_zoom_filter_scales_per_frame_then_recrops(self):
+        from clipmaker.render import zoom_filter
+
+        f = zoom_filter(1080, 1920, "1+0.1*t")
+        assert "eval=frame" in f
+        assert "w='trunc(1080*(1+0.1*t)/2)*2'" in f and "h='trunc(1920*(1+0.1*t)/2)*2'" in f
+        assert f.endswith("crop=1080:1920:'(iw-ow)/2':'(ih-oh)*0.4'")
+
+    def test_vertical_filter_with_zoom_appends_zoom_after_crop_scale(self):
+        f = vertical_filter(606, 1080, "120", 1080, 1920, zoom_expr="1.05")
+        assert f.index("crop=w=606") < f.index("eval=frame")
+        assert "setsar=1" in f
+
+    def test_vertical_filter_without_zoom_unchanged(self):
+        assert "eval=frame" not in vertical_filter(606, 1080, "120", 1080, 1920)
+
+    def test_fit_filter_for_native_aspect(self):
+        from clipmaker.render import fit_filter
+
+        assert "scale=1920:1080" in fit_filter(1920, 1080, 1920, 1080)
+        assert "eval=frame" in fit_filter(1920, 1080, 1920, 1080, zoom_expr="1.05")
+
+    def test_build_command_without_subtitles_filter_still_valid(self):
+        from clipmaker.render import subtitle_filter
+
+        assert subtitle_filter("/a.ass", None) == "ass=filename='/a.ass'"

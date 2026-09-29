@@ -32,11 +32,33 @@ def horizontal_filter(out_w: int, out_h: int) -> str:
     )
 
 
-def vertical_filter(crop_w: int, crop_h: int, x_expr: str, out_w: int, out_h: int) -> str:
+def zoom_filter(out_w: int, out_h: int, zoom_expr: str) -> str:
+    """Per-frame zoom: scale up by ``zoom_expr`` (a function of ``t``) then crop back to size.
+
+    The crop is biased upwards (40%) so the zoom stays around the face rather than the torso.
+    """
     return (
-        f"crop=w={crop_w}:h={crop_h}:x='{x_expr}':y=0,"
-        f"scale={out_w}:{out_h}:flags=lanczos,setsar=1"
+        f"scale=w='trunc({out_w}*({zoom_expr})/2)*2':h='trunc({out_h}*({zoom_expr})/2)*2'"
+        f":eval=frame:flags=bicubic,crop={out_w}:{out_h}:'(iw-ow)/2':'(ih-oh)*0.4'"
     )
+
+
+def vertical_filter(
+    crop_w: int, crop_h: int, x_expr: str, out_w: int, out_h: int, zoom_expr: str | None = None
+) -> str:
+    """Face-tracked crop window (x follows ``x_expr``) scaled to the output size."""
+    f = f"crop=w={crop_w}:h={crop_h}:x='{x_expr}':y=0,scale={out_w}:{out_h}:flags=lanczos,setsar=1"
+    if zoom_expr:
+        f += "," + zoom_filter(out_w, out_h, zoom_expr) + ",setsar=1"
+    return f
+
+
+def fit_filter(src_w: int, src_h: int, out_w: int, out_h: int, zoom_expr: str | None = None) -> str:
+    """Whole frame scaled (letter/pillar-boxed if needed) into the output; used when no crop is needed."""
+    f = horizontal_filter(out_w, out_h)
+    if zoom_expr:
+        f += "," + zoom_filter(out_w, out_h, zoom_expr) + ",setsar=1"
+    return f
 
 
 def subtitle_filter(ass_path: str, fonts_dir: str | None) -> str:
@@ -107,14 +129,16 @@ def find_ffmpeg() -> str:
 def render_clip(
     source: Path,
     out_path: Path,
-    ass_path: Path,
+    ass_path: Path | None,
     start: float,
     duration: float,
     video_filter: str,
     fonts_dir: Path | None,
 ) -> None:
-    """Run a single ffmpeg pass: seek, crop/scale, burn subtitles, encode H.264 + AAC."""
-    graph = video_filter + "," + subtitle_filter(str(ass_path.resolve()), str(fonts_dir.resolve()) if fonts_dir else None)
+    """Run a single ffmpeg pass: seek, crop/scale/zoom, burn subtitles (if any), encode H.264 + AAC."""
+    graph = video_filter
+    if ass_path is not None:
+        graph += "," + subtitle_filter(str(ass_path.resolve()), str(fonts_dir.resolve()) if fonts_dir else None)
     script = out_path.with_suffix(".filter.txt")
     script.write_text(graph, encoding="utf-8")
     cmd = build_ffmpeg_command(find_ffmpeg(), str(source), str(out_path), start, duration, str(script))
