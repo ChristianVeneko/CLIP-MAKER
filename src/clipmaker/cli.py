@@ -138,14 +138,15 @@ def main(argv: list[str] | None = None) -> int:
             outs = render_clips(video_dir / "source.mp4", clips, words, args.output / args.video_id, options)
             print("\n".join(f"[done] {o}" for o in outs))
         elif args.command == "preview-styles":
-            from .detection import probe_video
+            from .detection import face_center_at, probe_video
             from .options import ASPECT_SIZES
             from .previews import render_style_previews
 
             source = args.workdir / args.video_id / "source.mp4"
             src_w, src_h, _, _ = probe_video(source)
             paths = render_style_previews(
-                source, args.output / "style_previews", args.at, src_w, src_h, src_w / 2, ASPECT_SIZES[args.aspect_ratio]
+                source, args.output / "style_previews", args.at, src_w, src_h,
+                face_center_at(source, args.at) or src_w / 2, ASPECT_SIZES[args.aspect_ratio],
             )
             print("\n".join(f"[done] {p}" for p in paths))
     except (RuntimeError, ValueError, FileNotFoundError) as exc:

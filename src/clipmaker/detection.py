@@ -128,3 +128,16 @@ def sample_faces(
     finally:
         cap.release()
     return times, samples, detector.backend
+
+
+def face_center_at(video: Path, at: float) -> float | None:
+    """Horizontal centre of the largest face in the frame at ``at`` seconds (None if no face)."""
+    import cv2
+
+    cap = cv2.VideoCapture(str(video))
+    try:
+        cap.set(cv2.CAP_PROP_POS_MSEC, at * 1000)
+        ok, frame = cap.read()
+        return FaceDetector().center_x(frame) if ok else None
+    finally:
+        cap.release()
