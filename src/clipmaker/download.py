@@ -138,7 +138,7 @@ def friendly_download_error(raw: str) -> str:
         return "El video no está disponible en tu país (bloqueo geográfico)."
     if "unsupported url" in low:
         return "Ese enlace no es compatible. Usa un enlace de YouTube, Twitch o Kick."
-    if "404" in low or "not found" in low or "does not exist" in low or "removed" in low or "deleted" in low:
+    if "404" in low or "not found" in low or "does not exist" in low or "removed" in low or "deleted" in low or "no longer available" in low:
         return "El clip o video no existe, fue eliminado o ya no está disponible."
     if "403" in low or "forbidden" in low or "cloudflare" in low:
         return (

@@ -105,6 +105,7 @@ def test_parse_probe_rejects_live_metadata():
         ("ERROR: [twitch:vod] 123: This video is only available for subscribers", "suscriptores"),
         ("ERROR: [youtube] x: Private video. Sign in if you've been granted access", "privado"),
         ("ERROR: [twitch:clips] x: Unable to download JSON metadata: HTTP Error 404: Not Found", "eliminado"),
+        ("ERROR: [twitch:clips] x: This clip is no longer available", "eliminado"),
         ("ERROR: [Kick] x: Unable to download webpage: HTTP Error 403: Forbidden", "Cloudflare"),
         ("ERROR: Unsupported URL: https://example.com/x", "no es compatible"),
         ("ERROR: [Kick] x: The extractor is attempting impersonation, but no impersonate target is available", "curl-cffi"),
