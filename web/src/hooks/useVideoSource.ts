@@ -26,7 +26,16 @@ export function useVideoSource() {
       run(async () => {
         const trimmed = url.trim();
         const info = await api.probe(trimmed);
-        return { kind: "url", url: trimmed, title: info.title, duration: info.duration, thumbnail: info.thumbnail };
+        return {
+          kind: "url",
+          url: trimmed,
+          title: info.title,
+          duration: info.duration,
+          thumbnail: info.thumbnail,
+          platform: info.platform,
+          contentKind: info.kind,
+          uploader: info.uploader,
+        };
       }),
     [run, url],
   );

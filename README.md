@@ -1,6 +1,6 @@
 # clipmaker
 
-Turn a long YouTube video into short Spanish clips with eye-catching burned-in subtitles
+Turn a long YouTube, Twitch or Kick video into short Spanish clips with eye-catching burned-in subtitles
 (Opus Clip style): download, transcribe (mlx-whisper), pick viral moments (OpenAI), crop with
 face tracking, and burn karaoke-style word-highlighted subtitles.
 
@@ -43,6 +43,25 @@ uv run clipmaker select     URL [--genre G] [--clip-length L] [--max-clips N]
 uv run clipmaker render     VIDEO_ID --clips-file f.json --aspect-ratio 9:16
 uv run clipmaker preview-styles VIDEO_ID --at 380     # output/style_previews/<preset>.png
 ```
+
+### Supported platforms
+
+| Platform | Accepted URLs | Notes |
+|----------|---------------|-------|
+| YouTube | `youtu.be/ID`, `youtube.com/watch?v=ID`, `/shorts/ID`, `/embed/ID` | Full download, cached as `workdir/<id>/` |
+| Twitch | `clips.twitch.tv/SLUG`, `twitch.tv/CHANNEL/clip/SLUG`, `twitch.tv/videos/ID` | Cached as `workdir/twitch_<id>/` |
+| Kick | `kick.com/CHANNEL/clips/clip_ID`, `kick.com/CHANNEL?clip=clip_ID`, `kick.com/CHANNEL/videos/UUID`, `kick.com/video/UUID` | Cached as `workdir/kick_<id>/`. Kick sits behind Cloudflare, so yt-dlp impersonates Chrome via `curl-cffi` (installed as `yt-dlp[curl-cffi]`) |
+
+- **Live streams are rejected** (they never end): use the link of a finished clip or VOD.
+- **Long VODs**: with `--time-range A-B` (or the range in the web UI) only that section of a Twitch/Kick VOD is downloaded
+  (`--download-sections` + `--force-keyframes-at-cuts`) to `workdir/<platform>_<id>/source.rA-B.mp4`, cached per range.
+  Clip and caption times stay relative to the original VOD (the pipeline knows the section starts at `A`),
+  and explicit ranges in `--moments` are VOD times. `uv run clipmaker download URL --time-range A-B` does the same.
+- **Short sources** (Twitch/Kick clips are often under a minute): when the whole source is not longer than the maximum clip
+  length, it becomes a single clip with captions and reframing, and OpenAI is skipped (no API key needed).
+- **Subscriber-only Twitch VODs** and other login-gated videos: set `CLIPMAKER_COOKIES_FROM_BROWSER` to a browser name
+  (`chrome`, `safari`, `firefox`, ...) and yt-dlp reads that browser's cookies (`--cookies-from-browser`).
+  Log in to the platform in that browser first.
 
 ### Options (`run`; the same set is the `JobOptions` model used by the web app)
 

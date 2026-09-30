@@ -297,3 +297,29 @@ button {
     width: 100%;
   }
 }
+
+/* Platform chip (neutral, colored per platform) */
+.platform-chip {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--chip-fg, var(--muted));
+  background: var(--chip-bg, rgba(255, 255, 255, 0.08));
+  vertical-align: 1px;
+}
+.platform-youtube {
+  --chip-fg: #ff8a8a;
+  --chip-bg: rgba(255, 90, 90, 0.14);
+}
+.platform-twitch {
+  --chip-fg: #b79cff;
+  --chip-bg: rgba(145, 100, 255, 0.16);
+}
+.platform-kick {
+  --chip-fg: #6ee08d;
+  --chip-bg: rgba(83, 252, 24, 0.12);
+}

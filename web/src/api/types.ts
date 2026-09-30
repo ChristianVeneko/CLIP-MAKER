@@ -40,6 +40,9 @@ export interface ProbeResult {
   title: string;
   duration: number;
   thumbnail: string;
+  platform: "youtube" | "twitch" | "kick" | "other";
+  kind: "clip" | "vod";
+  uploader: string;
 }
 
 export interface UploadedVideo {
@@ -56,7 +59,16 @@ export interface UploadedSrt {
 
 /** The video the user picked, either by URL or by uploading a file. */
 export type VideoSource =
-  | { kind: "url"; url: string; title: string; duration: number; thumbnail: string }
+  | {
+      kind: "url";
+      url: string;
+      title: string;
+      duration: number;
+      thumbnail: string;
+      platform: ProbeResult["platform"];
+      contentKind: ProbeResult["kind"];
+      uploader: string;
+    }
   | { kind: "upload"; uploadId: string; title: string; duration: number; thumbnail: string };
 
 export interface JobSettings {

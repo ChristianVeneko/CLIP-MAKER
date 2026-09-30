@@ -20,12 +20,12 @@ export function Hero({ url, busy, error, onUrlChange, onSubmit, onFile }: Props)
       <h1>
         Convierte videos largos en <em>clips virales</em>
       </h1>
-      <p>Pega un enlace de YouTube o sube un archivo. Elegimos los mejores momentos y los subtitulamos por ti.</p>
+      <p>Pega un enlace de YouTube, Twitch o Kick (clips y VODs) o sube un archivo. Elegimos los mejores momentos y los subtitulamos por ti.</p>
       <form className="url-form" onSubmit={submit}>
         <input
           type="url"
           inputMode="url"
-          placeholder="https://www.youtube.com/watch?v=…"
+          placeholder="https://… (YouTube, Twitch o Kick)"
           aria-label="Enlace del video"
           value={url}
           onChange={(e) => onUrlChange(e.target.value)}

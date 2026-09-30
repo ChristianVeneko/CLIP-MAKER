@@ -56,7 +56,15 @@ export function buildCreateJobBody(source: VideoSource, s: JobSettings) {
   return {
     source:
       source.kind === "url"
-        ? { type: "url", url: source.url, title: source.title, thumbnail: source.thumbnail, duration: source.duration }
+        ? {
+            type: "url",
+            url: source.url,
+            title: source.title,
+            thumbnail: source.thumbnail,
+            duration: source.duration,
+            platform: source.platform,
+            uploader: source.uploader,
+          }
         : { type: "upload", upload_id: source.uploadId, title: source.title, duration: source.duration },
     model_tier: s.model_tier,
     genre: s.genre,

@@ -1,5 +1,5 @@
 import type { VideoSource } from "../api/types";
-import { formatClock } from "../lib/time";
+import { platformLabel, sourceSubtitle } from "../lib/platform";
 
 interface Props {
   source: VideoSource;
@@ -17,7 +17,17 @@ export function SourceCard({ source, onClear }: Props) {
       <div className="source-info">
         <div className="source-title">{source.title}</div>
         <div className="source-meta">
-          {formatClock(source.duration)} · {source.kind === "url" ? "YouTube" : "Archivo local"}
+          {source.kind === "url" ? (
+            <>
+              <span className={`platform-chip platform-${source.platform}`}>{platformLabel(source.platform)}</span>
+              {sourceSubtitle({ duration: source.duration, kind: source.contentKind, uploader: source.uploader })}
+            </>
+          ) : (
+            <>
+              <span className="platform-chip platform-file">Archivo local</span>
+              {sourceSubtitle({ duration: source.duration })}
+            </>
+          )}
         </div>
       </div>
       <button className="btn btn-sm btn-ghost" onClick={onClear}>
