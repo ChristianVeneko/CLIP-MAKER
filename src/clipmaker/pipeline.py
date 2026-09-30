@@ -22,7 +22,9 @@ from .selection import (
     load_clips_file,
     merge_clips,
     postprocess_clips,
+    fits_single_clip,
     select_with_openai,
+    whole_source_clip,
 )
 from .srt import cues_to_transcript, parse_srt
 from .subtitles import Word, rebase_words
@@ -61,7 +63,14 @@ def restrict_transcript(data: dict, window: tuple[float, float] | None) -> dict:
     return {**data, "segments": segments}
 
 
-def prepare_transcript(source: Path, video_dir: Path, options: JobOptions, whisper_model: str) -> dict:
+def source_local_window(start: float, end: float, source_offset: float) -> tuple[float, float]:
+    """Source-time [start, end] -> time inside a file whose first frame is at ``source_offset``."""
+    return max(0.0, start - source_offset), max(0.0, end - source_offset)
+
+
+def prepare_transcript(
+    source: Path, video_dir: Path, options: JobOptions, whisper_model: str, source_offset: float = 0.0
+) -> dict:
     if options.srt_path:
         print(f"[transcribe] using SRT {options.srt_path} (whisper skipped)")
         text = Path(options.srt_path).read_text(encoding="utf-8-sig", errors="replace")
@@ -70,7 +79,7 @@ def prepare_transcript(source: Path, video_dir: Path, options: JobOptions, whisp
             raise ValueError(f"{options.srt_path}: no valid SRT cues found")
         return restrict_transcript(cues_to_transcript(cues, options.language), options.time_range)
     cache = video_dir / transcript_cache_name(options.time_range, options.language)
-    return transcribe_video(source, cache, whisper_model, options.language, options.time_range)
+    return transcribe_video(source, cache, whisper_model, options.language, options.time_range, source_offset)
 
 
 def select_clips(
@@ -79,6 +88,8 @@ def select_clips(
     out_json: Path,
     options: JobOptions,
     clips_file: Path | None = None,
+    source_duration: float | None = None,
+    source_title: str | None = None,
 ) -> list[Clip]:
     min_d, max_d = options.duration_range
     ranges, remaining = extract_ranges(options.specific_moments)
@@ -93,6 +104,12 @@ def select_clips(
         auto = postprocess_clips(load_clips_file(clips_file), words, min_d, max_d, options.max_clips)
     elif wanted <= 0:
         pass
+    elif (
+        not forced and options.time_range is None and source_duration is not None
+        and fits_single_clip(source_duration, max_d)
+    ):
+        print(f"[select] source is only {source_duration:.0f}s: using it whole as one clip (OpenAI skipped)")
+        auto = [whole_source_clip(source_duration, source_title or "")]
     elif ranges and not os.environ.get("OPENAI_API_KEY"):
         print("[select] OPENAI_API_KEY not set; using only the explicit ranges")
     else:
@@ -120,7 +137,10 @@ def render_clips(
     options: JobOptions,
     sample_fps: float = 6.0,
     progress: ProgressFn | None = None,
+    source_offset: float = 0.0,
 ) -> list[Path]:
+    """Render clips. Clip/word times are in source time; ``source_offset`` is the source time of the
+    first frame of ``source`` (non-zero for downloaded VOD sections)."""
     out_w, out_h = options.output_size
     src_w, src_h, _, _ = probe_video(source)
     crop_w = cropping.crop_width_for(src_h, out_w / out_h)
@@ -132,6 +152,7 @@ def render_clips(
     for n, clip in enumerate(clips, start=1):
         report("render", (n - 1) / total, f"Rendering clip {n}/{total}")
         duration = clip.end - clip.start
+        seek, seek_end = source_local_window(clip.start, clip.end, source_offset)
         stem = f"{n:02d}_{slugify(clip.title)}"
         mp4, ass = out_dir / f"{stem}.mp4", out_dir / f"{stem}.ass"
         print(f"[render] {stem}  ({clip.start:.1f}s-{clip.end:.1f}s, {duration:.1f}s, {options.aspect_ratio})")
@@ -141,7 +162,7 @@ def render_clips(
             zoom_expr = zoom_expression(zoom_keyframes(triggers, duration))
             print(f"[render]   auto-zoom: {len(triggers)} punch-in(s)")
         if needs_crop:
-            times, samples, backend = sample_faces(source, clip.start, clip.end, sample_fps)
+            times, samples, backend = sample_faces(source, seek, seek_end, sample_fps)
             keypoints, info = plan_framing(times, samples, src_w, crop_w, duration, sample_fps)
             found = sum(bool(s) for s in samples)
             print(
@@ -155,7 +176,7 @@ def render_clips(
         if ass_text is not None:
             ass.write_text(ass_text, encoding="utf-8")
         render_clip(
-            source, mp4, ass if ass_text is not None else None, clip.start, duration, vf,
+            source, mp4, ass if ass_text is not None else None, seek, duration, vf,
             FONTS_DIR if FONTS_DIR.exists() else None,
         )  # fmt: skip
         outputs.append(mp4)
@@ -165,5 +186,5 @@ def render_clips(
 
 __all__ = [
     "prepare_transcript", "render_clips", "select_clips", "segments_and_words",
-    "clip_ranges_in_window", "restrict_transcript",
+    "clip_ranges_in_window", "restrict_transcript", "source_local_window",
 ]  # fmt: skip

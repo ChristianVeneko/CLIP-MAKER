@@ -21,6 +21,7 @@ from ..paths import default_output, default_workdir
 from ..options import ASPECT_RATIOS, CLIP_LENGTHS, GENRES, MODEL_DEFAULTS, resolve_model_id
 from ..render import slugify
 from ..selection import LANGUAGE_NAMES
+from ..sources import UnsupportedSource, ensure_supported
 from .media import MEDIA_TYPES, make_thumbnail as real_make_thumbnail, safe_media_path
 from .runner import find_upload_video, run_job
 from .schemas import CreateJobRequest, RequestError, build_options
@@ -164,7 +165,9 @@ def create_app(settings: Settings | None = None, services: Services | None = Non
     @app.post("/api/probe")
     def probe(req: ProbeRequest) -> dict:
         try:
-            return services.probe_url(req.url.strip())
+            url = req.url.strip()
+            ensure_supported(url)
+            return services.probe_url(url)
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(400, str(exc) or "Could not read that URL") from exc
 
@@ -213,8 +216,13 @@ def create_app(settings: Settings | None = None, services: Services | None = Non
             source = {"type": "upload", "upload_id": src.upload_id, "title": src.title,
                       "duration": src.duration, "thumbnail": f"/api/uploads/{src.upload_id}/thumbnail"}  # fmt: skip
         else:
-            source = {"type": "url", "url": (src.url or "").strip(), "title": src.title,
-                      "duration": src.duration, "thumbnail": src.thumbnail}  # fmt: skip
+            url = (src.url or "").strip()
+            try:
+                ensure_supported(url)
+            except UnsupportedSource as exc:
+                raise HTTPException(422, str(exc)) from exc
+            source = {"type": "url", "url": url, "title": src.title, "duration": src.duration,
+                      "thumbnail": src.thumbnail, "platform": src.platform, "uploader": src.uploader}  # fmt: skip
         try:
             options = build_options(req, services.has_api_key(), resolve_srt)
         except RequestError as exc:

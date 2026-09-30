@@ -210,3 +210,26 @@ def test_retry_rejects_non_failed_and_unknown(tmp_path):
     jid = run_job(client, app, {"source": URL_SOURCE})
     assert client.post(f"/api/jobs/{jid}/retry").status_code == 409
     assert client.post("/api/jobs/aaaaaaaaaaaa/retry").status_code == 404
+
+
+def test_probe_passes_platform_fields_through(tmp_path):
+    client, app = make_client(tmp_path)
+    app.state.services.probe_url = lambda url: {
+        "id": "s", "title": "C", "duration": 27.0, "thumbnail": "", "platform": "twitch", "kind": "clip", "uploader": "x",
+    }
+    body = client.post("/api/probe", json={"url": "https://clips.twitch.tv/s"}).json()
+    assert body["platform"] == "twitch" and body["kind"] == "clip" and body["uploader"] == "x"
+
+
+def test_probe_rejects_live_streams_before_probing(tmp_path):
+    client, app = make_client(tmp_path)
+    app.state.services.probe_url = lambda url: (_ for _ in ()).throw(AssertionError("must not probe"))
+    r = client.post("/api/probe", json={"url": "https://www.twitch.tv/ibai"})
+    assert r.status_code == 400 and "directo" in r.json()["detail"]
+
+
+def test_create_job_rejects_live_stream_url(tmp_path):
+    client, _ = make_client(tmp_path)
+    r = client.post("/api/jobs", json={"source": {"type": "url", "url": "https://kick.com/westcol"}})
+    assert r.status_code == 422 and "directo" in r.json()["detail"]
+

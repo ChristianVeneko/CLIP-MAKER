@@ -7,7 +7,8 @@ import sys
 from pathlib import Path
 
 from .captions import ALIASES, PRESETS
-from .download import download_video
+from .detection import probe_video
+from .download import download_video, find_source
 from .moments import parse_time_range
 from .options import ASPECT_RATIOS, CLIP_LENGTHS, GENRES, JobOptions
 from .paths import default_output, default_workdir
@@ -68,7 +69,7 @@ def options_from_args(args: argparse.Namespace) -> JobOptions:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="clipmaker",
-        description="Turn a long YouTube video into short clips with burned-in animated captions.",
+        description="Turn a long YouTube, Twitch or Kick video into short clips with burned-in animated captions.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -79,6 +80,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     dl = sub.add_parser("download", help="download the video only")
     dl.add_argument("url")
+    dl.add_argument("--time-range", metavar="START-END",
+                    help="Twitch/Kick VODs: download only this part, e.g. 1:10:00-1:20:00")  # fmt: skip
     _common(dl)
 
     tr = sub.add_parser("transcribe", help="download (cached) and transcribe only")
@@ -111,37 +114,45 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _prepare(args, options: JobOptions):
-    video_id, source = download_video(args.url, args.workdir)
-    data = prepare_transcript(source, args.workdir / video_id, options, args.whisper_model)
-    return video_id, source, data
+    video_id, source, offset = download_video(args.url, args.workdir, options.time_range)
+    data = prepare_transcript(source, args.workdir / video_id, options, args.whisper_model, offset)
+    return video_id, source, offset, data
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         if args.command == "download":
-            download_video(args.url, args.workdir)
+            rng = parse_time_range(args.time_range) if args.time_range else None
+            download_video(args.url, args.workdir, rng)
         elif args.command == "transcribe":
             _prepare(args, options_from_args(args))
         elif args.command in ("select", "run"):
             options = options_from_args(args)
-            video_id, source, data = _prepare(args, options)
+            video_id, source, offset, data = _prepare(args, options)
             segments, words = segments_and_words(data)
-            clips = select_clips(segments, words, args.workdir / video_id / "clips.json", options, args.clips_file)
+            clips = select_clips(
+                segments, words, args.workdir / video_id / "clips.json", options, args.clips_file,
+                source_duration=None if options.time_range else probe_video(source)[3],
+            )
             if args.command == "run":
-                outs = render_clips(source, clips, words, args.output / video_id, options)
+                outs = render_clips(source, clips, words, args.output / video_id, options, source_offset=offset)
                 print("\n".join(f"[done] {o}" for o in outs))
         elif args.command == "render":
             options = options_from_args(args)
             video_dir = args.workdir / args.video_id
-            data = prepare_transcript(video_dir / "source.mp4", video_dir, options, args.whisper_model)
+            found = find_source(video_dir, options.time_range)
+            if found is None:
+                raise FileNotFoundError(f"no downloaded source in {video_dir}; run `clipmaker download` first")
+            source, offset = found
+            data = prepare_transcript(source, video_dir, options, args.whisper_model, offset)
             segments, words = segments_and_words(data)
             clips_file = args.clips_file or video_dir / "clips.json"
             # a clips file is already final: do not re-clamp lengths to the option range
             from .selection import load_clips_file
 
             clips = load_clips_file(clips_file)
-            outs = render_clips(video_dir / "source.mp4", clips, words, args.output / args.video_id, options)
+            outs = render_clips(source, clips, words, args.output / args.video_id, options, source_offset=offset)
             print("\n".join(f"[done] {o}" for o in outs))
         elif args.command == "serve":
             import uvicorn
@@ -153,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
                 print("[serve] web/dist not found: only the API is served (build it with `npm run build` in web/)")
             uvicorn.run(create_app(settings), host=args.host, port=args.port)
         elif args.command == "preview-styles":
-            from .detection import face_center_at, probe_video
+            from .detection import face_center_at
             from .options import ASPECT_SIZES
             from .previews import render_style_previews
 

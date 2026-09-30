@@ -42,6 +42,11 @@ def offset_transcript(data: dict, offset: float) -> dict:
     return out
 
 
+def local_cut_range(time_range: tuple[float, float], source_offset: float) -> tuple[float, float]:
+    """A source-time range expressed in the local time of a file that starts at ``source_offset``."""
+    return max(0.0, time_range[0] - source_offset), max(0.0, time_range[1] - source_offset)
+
+
 def audio_cut_command(ffmpeg: str, source: str, output: str, start: float, end: float) -> list[str]:
     """ffmpeg command extracting [start, end] as 16 kHz mono wav (the format whisper wants)."""
     return [
@@ -91,9 +96,11 @@ def transcribe_video(
     model: str = DEFAULT_WHISPER_MODEL,
     language: str = "auto",
     time_range: tuple[float, float] | None = None,
+    source_offset: float = 0.0,
 ) -> dict:
     """Transcribe (cached). With ``time_range`` only that portion is cut and transcribed,
-    and timestamps are re-offset so they stay in source time."""
+    and timestamps are re-offset so they stay in source time. ``source_offset`` is the source
+    time of the first frame of ``source`` (non-zero for downloaded VOD sections)."""
     if out_json.exists():
         print(f"[transcribe] cached: {out_json}")
         return json.loads(out_json.read_text(encoding="utf-8"))
@@ -110,9 +117,10 @@ def transcribe_video(
         from .render import find_ffmpeg
 
         wav = out_json.with_suffix(".wav")
-        subprocess.run(audio_cut_command(find_ffmpeg(), str(source), str(wav), *time_range), check=True)
+        cut = local_cut_range(time_range, source_offset)
+        subprocess.run(audio_cut_command(find_ffmpeg(), str(source), str(wav), *cut), check=True)
         try:
-            data = offset_transcript(_run_whisper(str(wav), model, language), time_range[0])
+            data = offset_transcript(_run_whisper(str(wav), model, language), cut[0] + source_offset)
         finally:
             wav.unlink(missing_ok=True)
     out_json.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")

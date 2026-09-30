@@ -145,6 +145,18 @@ def forced_clips(ranges: list[tuple[float, float]], words: list[Word]) -> list[C
     return out
 
 
+def fits_single_clip(duration: float, max_duration: float) -> bool:
+    """True when the whole source is short enough to be a single clip (no selection needed)."""
+    return 0 < duration <= max_duration
+
+
+def whole_source_clip(duration: float, title: str) -> Clip:
+    return Clip(
+        start=0.0, end=round(duration, 3), title=title.strip() or "Clip completo",
+        hook="Clip completo", score=100,
+    )
+
+
 def merge_clips(forced: list[Clip], auto: list[Clip], max_clips: int) -> list[Clip]:
     """Forced clips first (never dropped); then non-overlapping auto clips up to ``max_clips`` total."""
     kept = list(forced)

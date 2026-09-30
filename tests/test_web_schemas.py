@@ -59,3 +59,13 @@ def test_source_requires_url_or_upload():
         CreateJobRequest(source={"type": "url"})
     with pytest.raises(Exception):
         CreateJobRequest(source={"type": "upload"})
+
+
+def test_short_url_source_does_not_require_api_key():
+    from clipmaker.web.schemas import CreateJobRequest, build_options
+
+    req = CreateJobRequest(source={"type": "url", "url": "https://clips.twitch.tv/x", "duration": 27.0})
+    assert build_options(req, has_api_key=False).max_clips >= 1
+    long = CreateJobRequest(source={"type": "url", "url": "https://youtu.be/x", "duration": 900.0})
+    with pytest.raises(RequestError):
+        build_options(long, has_api_key=False)

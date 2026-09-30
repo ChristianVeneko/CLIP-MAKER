@@ -53,3 +53,11 @@ def test_audio_cut_command():
     assert "-vn" in cmd and cmd[cmd.index("-ar") + 1] == "16000" and cmd[-1] == "out.wav"
     # -ss before -i (fast seek)
     assert cmd.index("-ss") < cmd.index("-i")
+
+
+def test_local_cut_range_for_section_files():
+    from clipmaker.transcribe import local_cut_range
+
+    assert local_cut_range((600.0, 660.0), 600.0) == (0.0, 60.0)
+    assert local_cut_range((600.0, 660.0), 0.0) == (600.0, 660.0)
+    assert local_cut_range((590.0, 660.0), 600.0) == (0.0, 60.0)

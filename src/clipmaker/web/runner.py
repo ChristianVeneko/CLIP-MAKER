@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..download import download_video
+from ..detection import probe_video
 from ..options import JobOptions
 from ..pipeline import prepare_transcript, render_clips, select_clips
 from ..transcribe import DEFAULT_WHISPER_MODEL, segments_and_words
@@ -18,9 +19,10 @@ def find_upload_video(upload_dir: Path) -> Path | None:
 def run_job(job: dict, report, job_dir: Path, workdir: Path, thumbnail=make_thumbnail) -> list[dict]:
     options = JobOptions(**job["options"])
     source = job["source"]
+    offset = 0.0
     if source["type"] == "url":
         report("download", 0.0, "Downloading video")
-        video_id, video = download_video(source["url"], workdir)
+        video_id, video, offset = download_video(source["url"], workdir, options.time_range)
         video_dir = workdir / video_id
     else:
         video_dir = workdir / "uploads" / source["upload_id"]
@@ -30,17 +32,20 @@ def run_job(job: dict, report, job_dir: Path, workdir: Path, thumbnail=make_thum
     report("download", 1.0, "Video ready")
 
     report("transcribe", 0.0, "Loading the SRT" if options.srt_path else "Transcribing audio")
-    data = prepare_transcript(video, video_dir, options, DEFAULT_WHISPER_MODEL)
+    data = prepare_transcript(video, video_dir, options, DEFAULT_WHISPER_MODEL, offset)
     segments, words = segments_and_words(data)
     report("transcribe", 1.0, "Transcript ready")
 
     report("select", 0.0, "Selecting clips")
-    clips = select_clips(segments, words, job_dir / "selection.json", options)
+    clips = select_clips(
+        segments, words, job_dir / "selection.json", options,
+        source_duration=None if options.time_range else probe_video(video)[3], source_title=source.get("title"),
+    )
     if not clips:
         raise RuntimeError("No clips were selected for this video and these options.")
     report("select", 1.0, f"{len(clips)} clip(s) selected")
 
-    outputs = render_clips(video, clips, words, job_dir, options, progress=report)
+    outputs = render_clips(video, clips, words, job_dir, options, progress=report, source_offset=offset)
     results = []
     for clip, mp4 in zip(clips, outputs, strict=True):
         jpg = mp4.with_suffix(".jpg")

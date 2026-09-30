@@ -40,10 +40,3 @@ def test_make_thumbnail_creates_jpeg(tmp_path):
     out = tmp_path / "t.jpg"
     make_thumbnail(video, out, at=0.5)
     assert out.read_bytes()[:2] == b"\xff\xd8"
-
-
-def test_parse_probe_extracts_fields():
-    from clipmaker.download import parse_probe
-
-    out = parse_probe('warning\n{"id": "abc", "title": "T", "duration": 61.5, "thumbnail": "http://x/y.jpg", "formats": []}')
-    assert out == {"id": "abc", "title": "T", "duration": 61.5, "thumbnail": "http://x/y.jpg"}

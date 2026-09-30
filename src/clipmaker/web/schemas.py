@@ -9,7 +9,8 @@ from typing import Literal
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from ..moments import extract_ranges
-from ..options import AspectRatio, ClipLength, Genre, JobOptions, ModelTier
+from ..options import CLIP_LENGTH_RANGES, AspectRatio, ClipLength, Genre, JobOptions, ModelTier
+from ..selection import fits_single_clip
 
 
 class RequestError(ValueError):
@@ -23,6 +24,8 @@ class Source(BaseModel):
     title: str | None = None
     thumbnail: str | None = None
     duration: float | None = None
+    platform: str | None = None
+    uploader: str | None = None
 
     @model_validator(mode="after")
     def _check(self):
@@ -65,7 +68,11 @@ def build_options(
         if found is None:
             raise RequestError("The uploaded SRT file was not found; upload it again.")
         srt_path = str(found)
-    if not has_api_key and not extract_ranges(req.specific_moments)[0]:
+    short = (
+        req.time_range is None and req.source.duration is not None
+        and fits_single_clip(req.source.duration, CLIP_LENGTH_RANGES[req.clip_length][1])
+    )  # a short source becomes one whole clip without OpenAI
+    if not has_api_key and not short and not extract_ranges(req.specific_moments)[0]:
         raise RequestError(NO_KEY_MESSAGE)
     try:
         return JobOptions(
